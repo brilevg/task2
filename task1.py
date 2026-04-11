@@ -54,7 +54,7 @@ def extract_date(soup):
             cols = rows[1].find_all("td")
             if len(cols) > 1:
                 text = cols[1].get_text(strip=True)
-                date = datetime.strptime(text, "%/%Y")
+                date = datetime.strptime(text, "%B %d, %Y")
                 return date.date().isoformat()
 
     except Exception as e:

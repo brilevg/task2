@@ -66,8 +66,7 @@ def parse_cve_data(base_item, data):
                 cwe_id = desc.get("cweId")
                 if cwe_id:
                     result["cwe"][cwe_id] = {
-                        "name": desc.get("description"),
-                        "description": desc.get("description")
+                        "name": desc.get("description")
                     }
 
     except Exception as e:
