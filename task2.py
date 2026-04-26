@@ -54,8 +54,17 @@ def parse_cve_data(base_item, data):
         affected = cve.get("affected", [])
 
         for item in affected:
-            for cpe in item.get("cpes", []):
-                result["cpe_list"].append(cpe)
+            vendor = item.get("vendor", "").lower()
+            product = item.get("product", "").lower()
+
+            versions = item.get("versions", [])
+
+            for v in versions:
+                version = v.get("version")
+
+                if vendor and product and version:
+                    cpe = f"cpe:2.3:a:{vendor}:{product}:{version}:*:*:*:*:*:*:*"
+                    result["cpe_list"].append(cpe)
 
         # CWE
         result["cwe"] = {}

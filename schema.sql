@@ -1,4 +1,4 @@
-CREATE TABLE vulnerabilities (
+CREATE TABLE vulnerability (
     id TEXT PRIMARY KEY,
     vendor_release_date DATE,
     vendor_release_url TEXT,
@@ -10,7 +10,7 @@ CREATE TABLE vulnerabilities (
 
 CREATE TABLE cvss (
     id SERIAL PRIMARY KEY,
-    cve_id TEXT REFERENCES vulnerabilities(id) ON DELETE CASCADE,
+    cve_id TEXT REFERENCES vulnerability(id) ON DELETE CASCADE,
     version TEXT,
     score FLOAT,
     vector TEXT,
@@ -19,7 +19,7 @@ CREATE TABLE cvss (
 
 CREATE TABLE cpe (
     id SERIAL PRIMARY KEY,
-    cve_id TEXT REFERENCES vulnerabilities(id) ON DELETE CASCADE,
+    cve_id TEXT REFERENCES vulnerability(id) ON DELETE CASCADE,
     cpe_string TEXT
 );
 
@@ -30,7 +30,7 @@ CREATE TABLE cwe (
 );
 
 CREATE TABLE vulnerability_cwe (
-    cve_id TEXT REFERENCES vulnerabilities(id) ON DELETE CASCADE,
+    cve_id TEXT REFERENCES vulnerability(id) ON DELETE CASCADE,
     cwe_id TEXT REFERENCES cwe(id) ON DELETE CASCADE,
     PRIMARY KEY (cve_id, cwe_id)
 );
