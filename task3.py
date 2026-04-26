@@ -30,8 +30,8 @@ def convert_to_xml(data):
 
         # --- cvss_list ---
         cvss_list_elem = ET.SubElement(vuln, "cvss_list")
-
-        for cvss in item.get("cvss_list", []):
+        cvss_list = item.get("cvss_list") or []
+        for cvss in cvss_list:
             cvss_elem = ET.SubElement(cvss_list_elem, "cvss", {
                 "version": str(cvss.get("version")),
                 "score": str(cvss.get("score")),
@@ -41,15 +41,14 @@ def convert_to_xml(data):
 
         # --- cpe_list ---
         cpe_list_elem = ET.SubElement(vuln, "cpe_list")
-
-        for cpe in item.get("cpe_list", []):
+        cpe_list = item.get("cpe_list") or []
+        for cpe in cpe_list:
             cpe_elem = ET.SubElement(cpe_list_elem, "cpe")
             cpe_elem.text = cpe
 
         # --- cwe ---
         cwe_list_elem = ET.SubElement(vuln, "cwe_list")
-
-        cwe_dict = item.get("cwe", {})
+        cwe_dict = item.get("cwe") or {}
         for cwe_id, cwe_data in cwe_dict.items():
             cwe_elem = ET.SubElement(cwe_list_elem, "cwe", {
                 "id": cwe_id,

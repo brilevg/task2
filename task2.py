@@ -20,40 +20,23 @@ async def fetch_cve(client, cve_id):
         print(f"Ошибка CVE {cve_id}: {e}")
         return None
 
-async def fetch_cwe_page(client, cwe_id):
+async def fetch_cwe_description(client, cwe_id):
     num = cwe_id.split("-")[1]
-    url = f"https://cwe.mitre.org/data/definitions/{num}.html"
-
+    url = f"https://cwe-api.mitre.org/api/v1/cwe/weakness/{num}"
     try:
         r = await client.get(url, timeout=20)
         r.raise_for_status()
-        return r.text
+        data = r.json()
+        weaknesses = data.get("Weaknesses", [])
+        if not weaknesses:
+            return None
+        desc = weaknesses[0].get("Description", "")
+        extended = weaknesses[0].get("Extended_Description", "")
+        # можно вернуть объединённый текст
+        return f"{desc} {extended}".strip()
     except Exception as e:
-        print(f"Ошибка CWE {cwe_id}: {e}")
+        print(f"Ошибка CWE API {cwe_id}: {e}")
         return None
-
-def parse_cwe_html(html):
-    soup = BeautifulSoup(html, "html.parser")
-
-    try:
-        # ищем текст "Description"
-        header = soup.find("h2", string="Description")
-
-        if not header:
-            header = soup.find(string="Description")
-
-        if header:
-            parent = header.find_parent()
-            desc_block = parent.find_next("div")
-
-            if desc_block:
-                return desc_block.get_text(strip=True)
-
-    except Exception as e:
-        print(f"Ошибка парсинга CWE HTML: {e}")
-
-    return None
-
 
 
 async def parse_cve_data(base_item, data, client):
@@ -81,7 +64,8 @@ async def parse_cve_data(base_item, data, client):
                         "vector": value.get("vectorString"),
                         "severity": value.get("baseSeverity")
                     })
-
+        if not result["cvss_list"]:
+            result["cvss_list"] = None
         # --- CPE ---
         result["cpe_list"] = []
         for item in cve.get("affected", []):
@@ -109,15 +93,15 @@ async def parse_cve_data(base_item, data, client):
 
                 if cwe_id not in cwe_cache:
                     async with semaphore:
-                        html = await fetch_cwe_page(client, cwe_id)
-                    description = parse_cwe_html(html) if html else None
-
+                        description = await fetch_cwe_description(client, cwe_id)
                     cwe_cache[cwe_id] = {
                         "name": desc.get("description"),
                         "description": description
                     }
 
                 result["cwe"][cwe_id] = cwe_cache[cwe_id]
+        if not result["cwe"]:
+            result["cwe"] = None
 
     except Exception as e:
         print(f"Ошибка парсинга {base_item['ID']}: {e}")

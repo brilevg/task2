@@ -44,7 +44,7 @@
       },
 
       "cvss_list": {
-        "type": "array",
+        "type": ["array","null"],
         "minItems": 1,
         "items": {
           "type": "object",
@@ -59,7 +59,7 @@
       },
 
       "cpe_list": {
-        "type": "array",
+        "type": ["array","null"],
         "minItems": 1,
         "items": {
           "type": "string"
@@ -67,7 +67,7 @@
       },
 
       "cwe": {
-        "type": "object",
+        "type": ["object","null"],
         "minProperties": 1,
         "additionalProperties": {
           "type": "object",
