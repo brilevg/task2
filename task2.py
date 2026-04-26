@@ -7,6 +7,7 @@ INPUT_FILE = "result_task_1.json"
 OUTPUT_FILE = "result_task_2.json"
 
 cwe_cache = {}
+semaphore = asyncio.Semaphore(5)
 
 async def fetch_cve(client, cve_id):
     url = f"https://cveawg.mitre.org/api/cve/{cve_id}"
@@ -107,7 +108,8 @@ async def parse_cve_data(base_item, data, client):
                     continue
 
                 if cwe_id not in cwe_cache:
-                    html = await fetch_cwe_page(client, cwe_id)
+                    async with semaphore:
+                        html = await fetch_cwe_page(client, cwe_id)
                     description = parse_cwe_html(html) if html else None
 
                     cwe_cache[cwe_id] = {
@@ -136,9 +138,8 @@ async def main():
 
         for base_item, data in zip(base_data, responses):
             if data:
-                enriched = parse_cve_data(base_item, data)
+                enriched = await parse_cve_data(base_item, data, client)
                 final_result.append(enriched)
-
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(final_result, f, indent=2, ensure_ascii=False)
 
