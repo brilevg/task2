@@ -6,6 +6,7 @@ import json
 INPUT_FILE = "result_task_1.json"
 OUTPUT_FILE = "result_task_2.json"
 
+cwe_cache = {}
 
 async def fetch_cve(client, cve_id):
     url = f"https://cveawg.mitre.org/api/cve/{cve_id}"
@@ -34,12 +35,18 @@ def parse_cwe_html(html):
     soup = BeautifulSoup(html, "html.parser")
 
     try:
-        desc_header = soup.find(id="Description")
+        # ищем текст "Description"
+        header = soup.find("h2", string="Description")
 
-        if desc_header:
-            desc_block = desc_header.find_next("div")
-            text = desc_block.get_text(strip=True)
-            return text
+        if not header:
+            header = soup.find(string="Description")
+
+        if header:
+            parent = header.find_parent()
+            desc_block = parent.find_next("div")
+
+            if desc_block:
+                return desc_block.get_text(strip=True)
 
     except Exception as e:
         print(f"Ошибка парсинга CWE HTML: {e}")
@@ -48,28 +55,23 @@ def parse_cwe_html(html):
 
 
 
-async def parse_cve_data(client,base_item, data):
+async def parse_cve_data(base_item, data, client):
     result = base_item.copy()
 
     try:
         cve = data.get("containers", {}).get("cna", {})
 
-        # ссылка на cve.org
         result["url"] = f"https://www.cve.org/CVERecord?id={base_item['ID']}"
 
-        # даты
         result["published_date"] = data.get("cveMetadata", {}).get("datePublished")
         result["updated_date"] = data.get("cveMetadata", {}).get("dateUpdated")
 
-        # описание
         descriptions = cve.get("descriptions", [])
         result["description"] = descriptions[0]["value"] if descriptions else None
 
-        # CVSS
+        # --- CVSS ---
         result["cvss_list"] = []
-        metrics = cve.get("metrics", [])
-
-        for metric in metrics:
+        for metric in cve.get("metrics", []):
             for key, value in metric.items():
                 if key.startswith("cvss"):
                     result["cvss_list"].append({
@@ -79,44 +81,41 @@ async def parse_cve_data(client,base_item, data):
                         "severity": value.get("baseSeverity")
                     })
 
-        # CPE
+        # --- CPE ---
         result["cpe_list"] = []
-        affected = cve.get("affected", [])
-
-        for item in affected:
-            vendor = item.get("vendor", "").lower()
-            product = item.get("product", "").lower()
+        for item in cve.get("affected", []):
+            vendor = (item.get("vendor") or "unknown").lower()
+            product = (item.get("product") or "unknown").lower()
 
             versions = item.get("versions", [])
 
             for v in versions:
-                version = v.get("version")
+                version = v.get("version") or "*"
+                cpe = f"cpe:2.3:a:{vendor}:{product}:{version}:*:*:*:*:*:*:*"
+                result["cpe_list"].append(cpe)
 
-                if vendor and product and version:
-                    cpe = f"cpe:2.3:a:{vendor}:{product}:{version}:*:*:*:*:*:*:*"
-                    result["cpe_list"].append(cpe)
+        result["cpe_list"] = list(set(result["cpe_list"]))
 
-        # CWE
-        cwe_cache = {}
+        # --- CWE ---
         result["cwe"] = {}
 
-        problem_types = cve.get("problemTypes", [])
-
-        for pt in problem_types:
+        for pt in cve.get("problemTypes", []):
             for desc in pt.get("descriptions", []):
                 cwe_id = desc.get("cweId")
 
-                if cwe_id:
-                    if cwe_id not in cwe_cache:
-                        html = await fetch_cwe_page(client, cwe_id)
-                        description = parse_cwe_html(html) if html else None
+                if not cwe_id:
+                    continue
 
-                        cwe_cache[cwe_id] = {
-                            "name": desc.get("description"),
-                            "description": description
-                        }
+                if cwe_id not in cwe_cache:
+                    html = await fetch_cwe_page(client, cwe_id)
+                    description = parse_cwe_html(html) if html else None
 
-                    result["cwe"][cwe_id] = cwe_cache[cwe_id]
+                    cwe_cache[cwe_id] = {
+                        "name": desc.get("description"),
+                        "description": description
+                    }
+
+                result["cwe"][cwe_id] = cwe_cache[cwe_id]
 
     except Exception as e:
         print(f"Ошибка парсинга {base_item['ID']}: {e}")
@@ -133,11 +132,11 @@ async def main():
         tasks = [fetch_cve(client, item["ID"]) for item in base_data]
         responses = await asyncio.gather(*tasks)
 
-    final_result = []
-    async with httpx.AsyncClient(timeout=20) as client:
+        final_result = []
+
         for base_item, data in zip(base_data, responses):
             if data:
-                enriched = parse_cve_data(client,base_item, data)
+                enriched = parse_cve_data(base_item, data)
                 final_result.append(enriched)
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
