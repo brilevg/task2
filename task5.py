@@ -37,7 +37,8 @@ def main():
         ))
 
         # --- cvss ---
-        for cvss in item.get("cvss_list", []):
+        cvss_list = item.get("cvss_list") or []
+        for cvss in cvss_list:
             cur.execute("""
                 INSERT INTO cvss (cve_id, version, score, vector, severity)
                 VALUES (%s, %s, %s, %s, %s)
@@ -57,7 +58,8 @@ def main():
             """, (cve_id, cpe))
 
         # --- cwe ---
-        for cwe_id, cwe_data in item.get("cwe", {}).items():
+        cwe_dict = item.get("cwe") or {}
+        for cwe_id, cwe_data in cwe_dict.items():
 
             # вставка CWE
             cur.execute("""
