@@ -1,3 +1,4 @@
+from bs4 import BeautifulSoup
 import httpx
 import asyncio
 import json
@@ -17,8 +18,37 @@ async def fetch_cve(client, cve_id):
         print(f"Ошибка CVE {cve_id}: {e}")
         return None
 
+async def fetch_cwe_page(client, cwe_id):
+    num = cwe_id.split("-")[1]
+    url = f"https://cwe.mitre.org/data/definitions/{num}.html"
 
-def parse_cve_data(base_item, data):
+    try:
+        r = await client.get(url, timeout=20)
+        r.raise_for_status()
+        return r.text
+    except Exception as e:
+        print(f"Ошибка CWE {cwe_id}: {e}")
+        return None
+
+def parse_cwe_html(html):
+    soup = BeautifulSoup(html, "html.parser")
+
+    try:
+        desc_header = soup.find(id="Description")
+
+        if desc_header:
+            desc_block = desc_header.find_next("div")
+            text = desc_block.get_text(strip=True)
+            return text
+
+    except Exception as e:
+        print(f"Ошибка парсинга CWE HTML: {e}")
+
+    return None
+
+
+
+async def parse_cve_data(client,base_item, data):
     result = base_item.copy()
 
     try:
@@ -67,21 +97,32 @@ def parse_cve_data(base_item, data):
                     result["cpe_list"].append(cpe)
 
         # CWE
+        cwe_cache = {}
         result["cwe"] = {}
+
         problem_types = cve.get("problemTypes", [])
 
         for pt in problem_types:
             for desc in pt.get("descriptions", []):
                 cwe_id = desc.get("cweId")
+
                 if cwe_id:
-                    result["cwe"][cwe_id] = {
-                        "name": desc.get("description")
-                    }
+                    if cwe_id not in cwe_cache:
+                        html = await fetch_cwe_page(client, cwe_id)
+                        description = parse_cwe_html(html) if html else None
+
+                        cwe_cache[cwe_id] = {
+                            "name": desc.get("description"),
+                            "description": description
+                        }
+
+                    result["cwe"][cwe_id] = cwe_cache[cwe_id]
 
     except Exception as e:
         print(f"Ошибка парсинга {base_item['ID']}: {e}")
 
     return result
+
 
 
 async def main():
@@ -93,11 +134,11 @@ async def main():
         responses = await asyncio.gather(*tasks)
 
     final_result = []
-
-    for base_item, data in zip(base_data, responses):
-        if data:
-            enriched = parse_cve_data(base_item, data)
-            final_result.append(enriched)
+    async with httpx.AsyncClient(timeout=20) as client:
+        for base_item, data in zip(base_data, responses):
+            if data:
+                enriched = parse_cve_data(client,base_item, data)
+                final_result.append(enriched)
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(final_result, f, indent=2, ensure_ascii=False)
