@@ -22,7 +22,7 @@ def main():
 
         # --- vulnerabilities ---
         cur.execute("""
-            INSERT INTO vulnerabilities
+            INSERT INTO vulnerability
             (id, vendor_release_date, vendor_release_url, url, published_date, updated_date, description)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (id) DO NOTHING
